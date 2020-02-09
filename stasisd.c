@@ -8,9 +8,10 @@
 #include <sys/epoll.h>
 #include <arpa/inet.h>
 
+#include "data.h"
+
 #define PORT 9047
 #define MAX_CLIENTS 12
-#define RECV_SIZE
 
 struct team_box {
         unsigned int team_number;
@@ -18,15 +19,42 @@ struct team_box {
         unsigned int uptime;
 };
 
-/* dunno what i'm doing w/ this yet */
-struct client_message {
-        unsigned int team_number;
-};
+/* write incoming message from client socket to buffer */
+int write_msg(char *recvd_string, int client_socket) {
+        unsigned int recvd_msg_size = 0;
 
-/* accept an auth object from a client and test it for validity */
-int authenticate_client(int client_socket) {
+        /* receive packet, write to buffer, add null terminator, blah blah blah */
+	while(recvd_msg_size < BUFSIZE - 1) {
+		if((recvd_msg_size += recv(client_socket, recvd_string + recvd_msg_size, 1, 0)) < 0) return -1;
 
+                if(*(recvd_string + recvd_msg_size - 1) == '?') {
+                        *(recvd_string + recvd_msg_size - 1) = '\0';
+                        return 0;
+                }
+        }
+}
+
+int handle_client(int sock) {
         return 0;
+}
+
+/* accept an auth message from a client and test it for validity */
+int authenticate_client(int client_socket) {
+        unsigned int recvd_msg_size = 0;
+        net_msg recvd_msg;
+        char *recvd_string = malloc(BUFSIZE);
+
+        if(write_msg(recvd_string, client_socket) < 0) return -1;
+
+        recvd_msg = destring_msg(recvd_string); // recvd_string is freed implicitly
+
+        /* error-check all aspects of auth message */
+        /* return 0 for auth, -1 for auth failure */  
+        if((recvd_msg.op + recvd_msg.id) != (recvd_msg.check ^ 'L')) return -1;
+        if(recvd_msg.op != 47) return -1;
+        if(recvd_msg.id < 10 || recvd_msg.id > 21) return -1;
+
+        return 0;      
 }
 
 /* authenticate and accept an incoming client */
@@ -44,7 +72,13 @@ int accept_client(int server_socket, int epoll_fd) {
         /* authenticate client */
         /* accept some authentification object from the client, run it through a function to test it */
         /* to do: determine auth structure, send structure via stream socket, verify function */
+        if(authenticate_client(client_socket) < 0) {
+                perror("guru meditation");
+                close(client_socket);
+                return -1;
+        }
 
+        printf("Client authenticated!\n");
 
         /* add client socket to epoll interest list */
         client_event.events = EPOLLIN;
@@ -125,6 +159,7 @@ int main(int argc, char **argv) {
                         /* a new client is trying to connect */
                         if((tmp_fd = ready_sockets[i].data.fd) == server_socket) {
                                 if((tmp_fd = accept_client(server_socket, epoll_fd)) < 0) {
+                                        fprintf(stderr, "connection to new client dropped or new client failed authentification\n");
                                         perror("guru meditation");
                                         continue;       // if accepting OR authentication fails, try the next ready socket
                                 }
