@@ -9,21 +9,19 @@
 
 #include "data.h"
 
-int authenticate(int sock) {
-        net_msg auth_msg;
-        char *auth_string;
+int send_msg(int sock, int id, int op) {
+        net_msg msg;
+        char *msg_string;
 
-        auth_msg = build_msg(47, 10);
-        auth_string = stringify_msg(auth_msg);
+        msg = build_msg(op, id);
+        msg_string = stringify_msg(msg);
 
-        if(send(sock, auth_string, strlen(auth_string), 0) < 0) {
-                perror("guru meditation");
-                close(sock);
-                free(auth_string);
+        if(send(sock, msg_string, strlen(msg_string), 0) < 0) {
+                free(msg_string);
                 return -1;
         }
 
-        free(auth_string);
+        free(msg_string);
         return 0;
 }
 
@@ -49,10 +47,19 @@ int main(int argc, char **argv) {
                 exit(1);
         }
 
-        if(authenticate(sock) < 0) {
+        if(send_msg(sock, atoi(argv[2]), 47) < 0) {
                 perror("guru meditation");
                 close(sock);
                 exit(1);
         }
 
+        for(;;) {
+                sleep(60);
+
+                if(send_msg(sock, atoi(argv[2]), 73) < 0) {
+                        perror("guru meditation");
+                        close(sock);
+                        exit(1);
+                }
+        }
 }
