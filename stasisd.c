@@ -23,6 +23,33 @@ typedef struct {
         time_t last_time;
 } team_box;
 
+/* read the log file to update team time values */
+int update_reg(team_box *reg_key) {
+        FILE *log_file;
+        char *line = NULL;
+        size_t n = 0;
+        unsigned int tmp_i, tmp_up;
+        time_t tmp_last;
+
+        /* open log file */
+        if((log_file = fopen("./log_file", "a+")) == NULL) {
+                perror("guru meditation");
+                exit(1);
+        }
+        
+        /* seek to the beginning of the log file */
+        fseek(log_file, 0, SEEK_SET);
+
+        while(getline(&line, &n, log_file) != -1) {
+                sscanf(line, "%u,%u,%ld", &tmp_i, &tmp_up, &tmp_last);
+                reg_key[tmp_i - 10].uptime = tmp_up;
+                reg_key[tmp_i - 10].last_time = tmp_last;
+        }
+
+        free(line);
+        fclose(log_file);
+}
+
 /* write incoming message from client socket to buffer */
 int write_msg(char *recvd_string, int client_socket) {
         /* receive packet, write to buffer, add null terminator, blah blah blah */
@@ -133,6 +160,12 @@ int main(int argc, char **argv) {
         /* clear and initialize registered client array */
         memset(reg_key, 0, sizeof(team_box) * MAX_BOXES);
         for(int i = 0; i < MAX_BOXES; ++i) reg_key[i].team_number = (i + 10);
+
+        /* update client registry from log file */
+        if(update_reg(reg_key) < 0) {
+                perror("guru meditation");
+                exit(1);
+        }
         
         /* spawn socket and prepare for binding */
         if((server_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
