@@ -24,18 +24,11 @@ typedef struct {
 } team_box;
 
 /* read the log file to update team time values */
-int update_reg(team_box *reg_key) {
-        FILE *log_file;
+int update_reg(team_box *reg_key, FILE *log_file) {
         char *line = NULL;
         size_t n = 0;
         unsigned int tmp_i, tmp_up;
         time_t tmp_last;
-
-        /* open log file */
-        if((log_file = fopen("./log_file", "a+")) == NULL) {
-                perror("guru meditation");
-                exit(1);
-        }
         
         /* seek to the beginning of the log file */
         fseek(log_file, 0, SEEK_SET);
@@ -46,8 +39,7 @@ int update_reg(team_box *reg_key) {
                 reg_key[tmp_i - 10].last_time = tmp_last;
         }
 
-        free(line);
-        fclose(log_file);
+        free(line);     // memory is implicitly allocated in getline()
 }
 
 /* write incoming message from client socket to buffer */
@@ -83,7 +75,7 @@ int increment_client(net_msg recvd_msg) {
         return 0;
 }
 
-int handle_client(int client_socket, team_box *reg_key) {
+int handle_client(int client_socket, team_box *reg_key, FILE *log_file) {
         net_msg recvd_msg;
         char *recvd_string = malloc(BUFSIZE);
         time_t new_time;
@@ -102,7 +94,7 @@ int handle_client(int client_socket, team_box *reg_key) {
                         reg_key[recvd_msg.id - 10].fd = client_socket;
 
                         /* DEBUG */
-                        printf("team %d has been authenticated", recvd_msg.id - 10);
+                        printf("team %d has been authenticated\n", recvd_msg.id - 10);
 
                         break;
                 case 73:
@@ -114,6 +106,10 @@ int handle_client(int client_socket, team_box *reg_key) {
                         if(increment_client(recvd_msg) < 0) return -1;
                         ++reg_key[recvd_msg.id - 10].uptime;
                         reg_key[recvd_msg.id - 10].last_time = new_time;
+
+                        /* update log file information*/
+                        fprintf(log_file, "%d,%d,%ld\n", recvd_msg.id, reg_key[recvd_msg.id - 10].uptime, reg_key[recvd_msg.id - 10].last_time);
+                        fflush(log_file);
 
                         /* DEBUG */
                         printf("team %d has points %d\n", recvd_msg.id - 10, reg_key[recvd_msg.id - 10].uptime);
@@ -156,15 +152,29 @@ int main(int argc, char **argv) {
         struct epoll_event listener_event;
         struct epoll_event ready_sockets[MAX_CLIENTS + 1];      // leave room for listener
         team_box *reg_key = malloc(sizeof(team_box) * MAX_BOXES);
+        FILE *log_file;
                 
         /* clear and initialize registered client array */
         memset(reg_key, 0, sizeof(team_box) * MAX_BOXES);
         for(int i = 0; i < MAX_BOXES; ++i) reg_key[i].team_number = (i + 10);
-
-        /* update client registry from log file */
-        if(update_reg(reg_key) < 0) {
+        
+        /* open log file */
+        if((log_file = fopen("./log_file", "r+")) == NULL) {
                 perror("guru meditation");
                 exit(1);
+        }
+
+        /* update client registry from log file */
+        if(update_reg(reg_key, log_file) < 0) {
+                perror("guru meditation");
+                exit(1);
+        }
+
+        /* seek to end of log file in anticipation of writing */
+        fseek(log_file, 0, SEEK_END);
+
+        for(int i; i < MAX_BOXES; ++i) {
+                printf("team %u has points %u!\n", reg_key[i].team_number, reg_key[i].uptime);
         }
         
         /* spawn socket and prepare for binding */
@@ -211,7 +221,7 @@ int main(int argc, char **argv) {
                 close(epoll_fd);
                 exit(1);
         }
-        
+
         /* main program loop - verify and handle clients by activity */
         for(;;) {
                 /* block until some sockets are ready */
@@ -232,7 +242,7 @@ int main(int argc, char **argv) {
                         
                         /* receiving data from a client */
                         else {
-                                switch(handle_client(tmp_fd, reg_key)) {
+                                switch(handle_client(tmp_fd, reg_key, log_file)) {
                                         case -2:        // attempt to register an already-registered client or authentification fails
                                                 close(tmp_fd);
 
