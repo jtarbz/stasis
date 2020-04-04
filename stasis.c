@@ -9,14 +9,15 @@
 
 #include "data.h"
 
-int send_msg(int sock, int id, int op) {
+int send_msg(int sock, int id, int op)
+{
         net_msg msg;
         char *msg_string;
 
         msg = build_msg(op, id);
         msg_string = stringify_msg(msg);
 
-        if(send(sock, msg_string, strlen(msg_string), 0) < 0) {
+        if (send(sock, msg_string, strlen(msg_string), 0) < 0) {
                 free(msg_string);
                 return -1;
         }
@@ -25,12 +26,13 @@ int send_msg(int sock, int id, int op) {
         return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
         int sock;
         struct sockaddr_in server;
 
         /* socket creation and server addressing */
-        if((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+        if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
                 perror("guru meditation");
                 exit(1);
         }
@@ -41,13 +43,13 @@ int main(int argc, char **argv) {
         server.sin_port = htons(9047);
 
         /* establish connection to server */
-        if(connect(sock, (struct sockaddr *)&server, sizeof server) < 0) {
+        if (connect(sock, (struct sockaddr *)&server, sizeof server) < 0) {
                 perror("guru meditation");
                 close(sock);
                 exit(1);
         }
 
-        if(send_msg(sock, atoi(argv[2]), 47) < 0) {
+        if (send_msg(sock, atoi(argv[2]), 47) < 0) {
                 perror("guru meditation");
                 close(sock);
                 exit(1);
@@ -56,7 +58,7 @@ int main(int argc, char **argv) {
         for(;;) {
                 sleep(60);
 
-                if(send_msg(sock, atoi(argv[2]), 73) < 0) {
+                if (send_msg(sock, atoi(argv[2]), 73) < 0) {
                         perror("guru meditation");
                         close(sock);
                         exit(1);

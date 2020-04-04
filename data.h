@@ -9,7 +9,8 @@ typedef struct {
 
 /* load operation and id into the message structure.
    takes an operator and team id and returns a whole net_msg struct. */
-net_msg build_msg(unsigned int op, unsigned int id) {
+net_msg build_msg(unsigned int op, unsigned int id)
+{
         net_msg new_msg;
         
         new_msg.op = op;
@@ -21,7 +22,8 @@ net_msg build_msg(unsigned int op, unsigned int id) {
 
 /* convert net_msg structure into ANSI string for transfer.
    takes a net_msg struct and returns a char pointer of 12 bytes. */
-char *stringify_msg(net_msg new_msg) {
+char *stringify_msg(net_msg new_msg)
+{
         /* message string should never exceed 12 bytes
            2 bytes + delimiter + 2 bytes + delimiter + 3 bytes + end-marker = 10 bytes
            extra room is left just in case */
@@ -34,7 +36,8 @@ char *stringify_msg(net_msg new_msg) {
 /* convert a stringified net_msg back to a net_msg structure.
    takes a pointer to a string and returns a net_msg structure.
    this function frees the pointer passed to it. */
-net_msg destring_msg(char *new_msg) {
+net_msg destring_msg(char *new_msg)
+{
         net_msg destringed_msg;
 
         sscanf(new_msg, "%d+%d=%d", &destringed_msg.op, &destringed_msg.id, &destringed_msg.check);
