@@ -24,7 +24,7 @@ typedef struct {
 } team_box;
 
 /* read the log file to update team time values */
-int update_reg(team_box *reg_key, FILE *log_file)
+int update_reg(team_box *reg_key, FILE *log_file, time_t *first_time)
 {
         char *line = NULL;
         size_t n = 0;
@@ -34,6 +34,13 @@ int update_reg(team_box *reg_key, FILE *log_file)
         /* seek to the beginning of the log file */
         fseek(log_file, 0, SEEK_SET);
 
+	if (getline(&line, &n, log_file) != -1)
+		sscanf(line, "%ld", &first_time);
+	else {
+		*first_time = time(NULL);
+		fprintf(log_file, "%ld\n", *first_time);
+	}
+
         while (getline(&line, &n, log_file) != -1) {
                 sscanf(line, "%u,%u,%ld", &tmp_i, &tmp_up, &tmp_last);
                 reg_key[tmp_i - 10].uptime = tmp_up;
@@ -41,6 +48,7 @@ int update_reg(team_box *reg_key, FILE *log_file)
         }
 
         free(line);     // memory is implicitly allocated in getline()
+	return 0;
 }
 
 /* write incoming message from client socket to buffer */
@@ -80,7 +88,7 @@ int increment_client(net_msg recvd_msg)
         return 0;
 }
 
-int handle_client(int client_socket, team_box *reg_key, FILE *log_file)
+int handle_client(int client_socket, team_box *reg_key, FILE *log_file, time_t *first_time)
 {
         net_msg recvd_msg;
         char *recvd_string = malloc(BUFSIZE);
@@ -114,7 +122,7 @@ int handle_client(int client_socket, team_box *reg_key, FILE *log_file)
 		reg_key[recvd_msg.id - 10].last_time = new_time;
 
 		/* update log file information*/
-		fprintf(log_file, "%d,%d,%ld\n", recvd_msg.id, reg_key[recvd_msg.id - 10].uptime, reg_key[recvd_msg.id - 10].last_time);
+		fprintf(log_file, "%d,%d,%ld\n", recvd_msg.id, reg_key[recvd_msg.id - 10].uptime, reg_key[recvd_msg.id - 10].last_time - *first_time);
 		fflush(log_file);
 
 		/* DEBUG */
@@ -160,6 +168,7 @@ int main(int argc, char **argv)
         struct epoll_event listener_event;
         struct epoll_event ready_sockets[MAX_CLIENTS + 1];      // leave room for listener
         team_box *reg_key = malloc(sizeof(team_box) * MAX_BOXES);
+	time_t first_time;	// to avoid horrible massive time values
         FILE *log_file;
                 
         /* clear and initialize registered client array */
@@ -167,13 +176,13 @@ int main(int argc, char **argv)
         for (int i = 0; i < MAX_BOXES; ++i) reg_key[i].team_number = (i + 10);
         
         /* open log file */
-        if ((log_file = fopen("./log_file", "r+")) == NULL) {
+        if ((log_file = fopen("./log_file", "a+")) == NULL) {
                 perror("guru meditation");
                 exit(1);
         }
 
         /* update client registry from log file */
-        if (update_reg(reg_key, log_file) < 0) {
+        if (update_reg(reg_key, log_file, &first_time) < 0) {
                 perror("guru meditation");
                 exit(1);
         }
@@ -250,7 +259,7 @@ int main(int argc, char **argv)
                         
                         /* receiving data from a client */
                         else {
-                                switch (handle_client(tmp_fd, reg_key, log_file)) {
+                                switch (handle_client(tmp_fd, reg_key, log_file, &first_time)) {
 				case -2:        // attempt to register an already-registered client or authentification fails
 					close(tmp_fd);
 
