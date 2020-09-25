@@ -11,18 +11,6 @@
 
 #include "data.h"
 
-#define PORT 9047
-#define MAX_CLIENTS 5096
-#define MAX_BOXES 12
-
-/* structure to hold information about individual team boxes */
-typedef struct {
-        unsigned int team_number;
-        unsigned int fd;
-        unsigned int uptime;
-        time_t last_time;
-} team_box;
-
 /* read the log file to update team time values */
 int update_reg(team_box *reg_key, FILE *log_file, time_t *first_time)
 {
