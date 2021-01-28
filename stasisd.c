@@ -22,8 +22,9 @@ int update_reg(team_box *reg_key, FILE *log_file, time_t *first_time)
         /* seek to the beginning of the log file */
         fseek(log_file, 0, SEEK_SET);
 
-	if (getline(&line, &n, log_file) != -1)
-		sscanf(line, "%ld", &first_time);
+	if (getline(&line, &n, log_file) != -1) {
+		sscanf(line, "%ld", first_time);
+	}
 	else {
 		*first_time = time(NULL);
 		fprintf(log_file, "%ld\n", *first_time);
@@ -59,8 +60,11 @@ int authenticate_client(net_msg recvd_msg)
 {
         /* error-check all aspects of auth message */
         /* return 0 for auth, -1 for auth failure */  
-        if ((recvd_msg.op + recvd_msg.id) != (recvd_msg.check ^ 'L')) return -1;
-        if (recvd_msg.id < 10 || recvd_msg.id > 21) return -1;
+        if ((recvd_msg.op + recvd_msg.id) != (recvd_msg.check ^ 'L'))
+		return -1;
+
+        if (recvd_msg.id < 10 || recvd_msg.id > 21)
+		return -1;
 
         return 0;      
 }
@@ -70,8 +74,11 @@ int increment_client(net_msg recvd_msg)
 {
         /* error-check the inc message */
         /* return 0 for good, -1 for failure */
-        if ((recvd_msg.op + recvd_msg.id) != (recvd_msg.check ^ 'L')) return -1;
-        if (recvd_msg.id < 10 || recvd_msg.id > 21) return -1;
+        if ((recvd_msg.op + recvd_msg.id) != (recvd_msg.check ^ 'L'))
+		return -1;
+
+        if (recvd_msg.id < 10 || recvd_msg.id > 21)
+		return -1;
 
         return 0;
 }
@@ -82,17 +89,26 @@ int handle_client(int client_socket, team_box *reg_key, FILE *log_file, time_t *
         char *recvd_string = malloc(BUFSIZE);
         time_t new_time;
 
-        if (write_msg(recvd_string, client_socket) < 0) return -1;
+        if (write_msg(recvd_string, client_socket) < 0)
+		return -1;
+
         recvd_msg = destring_msg(recvd_string); // recvd_string is freed implicitly
 
         switch (recvd_msg.op) {
         case 47:
-		if (authenticate_client(recvd_msg) < 0) return -2;
-		for (int i = 0; i < MAX_BOXES; ++i) if(reg_key[i].fd == client_socket) return -2;
+		if (authenticate_client(recvd_msg) < 0)
+			return -2;
+
+		for (int i = 0; i < MAX_BOXES; ++i) {
+			if(reg_key[i].fd == client_socket)
+				return -2;
+		}
+
 		if (reg_key[recvd_msg.id - 10].fd != 0) {
 			fprintf(stderr, "double-register of client\n");
 			return -2;
 		}
+
 		reg_key[recvd_msg.id - 10].fd = client_socket;
 
 		/* DEBUG */
@@ -105,7 +121,10 @@ int handle_client(int client_socket, team_box *reg_key, FILE *log_file, time_t *
 			fprintf(stderr, "team %d has too short of an interval between incs, probably cheating\n", recvd_msg.id - 10);
 			return -1;
 		}
-		if (increment_client(recvd_msg) < 0) return -1;
+
+		if (increment_client(recvd_msg) < 0)
+			return -1;
+
 		++reg_key[recvd_msg.id - 10].uptime;
 		reg_key[recvd_msg.id - 10].last_time = new_time;
 
@@ -138,7 +157,7 @@ int accept_client(int server_socket, int epoll_fd)
         }
 
         /* add client socket to epoll interest list */
-        client_event.events = EPOLLIN;
+        client_event.events = EPOLLIN | EPOLLRDHUP;
         client_event.data.fd = client_socket;
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &client_event) < 0) {
                 perror("guru meditation");
@@ -244,7 +263,20 @@ int main(int argc, char **argv)
                                         continue;       // if accepting fails try the next ready socket
                                 }
                         }
-                        
+
+			/* detect if client disconnected */
+			else if (ready_sockets[i].events & EPOLLRDHUP) {
+				for (int j = 0; j < MAX_BOXES; ++j) {
+					if (reg_key[j].fd == tmp_fd) {
+						close(tmp_fd);
+						reg_key[j].fd = 0;
+						break;
+					} else {
+						close(tmp_fd);
+					}
+				}
+			}
+
                         /* receiving data from a client */
                         else {
                                 switch (handle_client(tmp_fd, reg_key, log_file, &first_time)) {
@@ -254,10 +286,10 @@ int main(int argc, char **argv)
 					break;
 				case -1:        // read on socket fails (client disconnected), or too short inc interval, or something just doesn't add up
 					/* if a team box, remove client from registry */
-					for (int i = 0; i < MAX_BOXES; ++i) {
-						if (reg_key[i].fd == tmp_fd) {
+					for (int j = 0; j < MAX_BOXES; ++j) {
+						if (reg_key[j].fd == tmp_fd) {
 							close(tmp_fd);
-							reg_key[i].fd = 0;
+							reg_key[j].fd = 0;
 							break;
 						} else {
 							close(tmp_fd);
